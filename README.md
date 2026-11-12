@@ -104,7 +104,7 @@ flowchart LR
 
 1. **Layer 1 — Cryptographic Metadata Signature (`asset.extras` & `asset.copyright`):**
    - คำนวณรหัสลายเซ็น `signature` ด้วย `HMAC-SHA256` ร่วมกับ `WATERMARK_SECRET`
-   - ฝังข้อมูล `{ platform: 'Broken Design', modelId, ownerId, license, purchaseId, signature, issuedAt }` ลงใน `asset.extras` และข้อความลิขสิทธิ์ใน `asset.copyright`
+   - ฝังข้อมูล `{ platform: 'Lixyte', modelId, ownerId, license, purchaseId, signature, issuedAt }` ลงใน `asset.extras` และข้อความลิขสิทธิ์ใน `asset.copyright`
    - ตอนครีเอเตอร์อัปโหลดโมเดล ระบบจะฝัง `purchaseId: 'original'` เป็นลายน้ำต้นฉบับ และเมื่อผู้ซื้อกดดาวน์โหลด ระบบจะฝัง `purchaseId` และ `license_type` ของผู้ซื้อรายนั้นลงในไฟล์ `.glb` พร้อมบันทึกค่า `watermark_hash` ลงในตาราง `purchases`
 2. **Layer 2 — 3D Vertex Steganography (`POSITION` Accessor):**
    - ดึงพิกัดจุดยอด (`POSITION` accessor) ของ Mesh แรกในไฟล์ `.glb` จำนวน 64 จุดแรก
