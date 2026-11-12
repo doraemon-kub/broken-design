@@ -3,8 +3,11 @@ dotenv.config();
 
 export const env = {
   port: Number(process.env.PORT) || 4001,
+  // Number of reverse proxies in front of the app (Render = 1). Needed so rate limits see the real client IP.
+  trustProxy: Number(process.env.TRUST_PROXY) || 0,
   databaseUrl: process.env.DATABASE_URL || '',
   jwtSecret: process.env.JWT_SECRET || 'dev-secret',
+  watermarkSecret: process.env.WATERMARK_SECRET || 'lixyte-broken-design-watermark-secret-2026',
   storageProvider: (process.env.STORAGE_PROVIDER || 'local') as 'local' | 'supabase',
   storageDir: process.env.STORAGE_DIR || './storage_data',
   tmpUploadDir: process.env.TMP_UPLOAD_DIR || './tmp_uploads',

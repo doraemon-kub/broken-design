@@ -1,12 +1,15 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import crypto from 'crypto';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import fsp from 'fs/promises';
 import { env } from '../../config/env';
 import { db } from '../../config/db';
+import { supabase } from '../../config/supabase';
 import { getStorage } from '../../storage';
 import { validateGlbFile, computeFileSha256 } from '../../utils/glbValidator';
+import { embedLicenseAndWatermark } from '../../utils/glbWatermark';
 import { requireAuth, requireSeller } from '../../middlewares/auth.middleware';
 import { AppError } from '../../middlewares/error.middleware';
 
@@ -138,6 +141,26 @@ uploadRouter.post(
         throw new AppError(400, 'INVALID_GLB', validation.reason || 'File is not a valid Binary glTF (GLB v2)');
       }
 
+      const modelId = crypto.randomUUID();
+      const ownerId = req.user!.id;
+
+      // Embed platform origin license & vertex steganography watermark (purchaseId: 'original')
+      const rawGlbBuffer = await fsp.readFile(modelFile.path);
+      let finalFileSize = modelFile.size;
+      try {
+        const { buffer: watermarkedBuffer } = await embedLicenseAndWatermark(rawGlbBuffer, {
+          modelId,
+          ownerId,
+          license: normalizedLicense,
+          purchaseId: 'original',
+        });
+        await fsp.writeFile(modelFile.path, watermarkedBuffer);
+        finalFileSize = watermarkedBuffer.length;
+      } catch (wmErr: any) {
+        if (wmErr instanceof AppError) throw wmErr;
+        throw new AppError(400, 'INVALID_GLB', wmErr?.message || 'Failed to parse and watermark GLB structure');
+      }
+
       const storage = getStorage();
 
       // Store main model by content hash
@@ -190,35 +213,61 @@ uploadRouter.post(
       }
       parsedTags = Array.from(new Set(parsedTags));
 
-      const ownerId = req.user!.id;
       const parsedCurrency = String(currency || 'USD').trim().toUpperCase().slice(0, 3);
 
-      // 6. Insert record into database
-      const result = await db.query(
-        `INSERT INTO models (
-          owner_id, title, description, tags, license,
-          file_hash, file_size, preview_hash, poster_hash,
-          price_cents, currency
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-        RETURNING *`,
-        [
-          ownerId,
-          title.trim(),
-          description.trim(),
-          parsedTags,
-          normalizedLicense,
-          fileHash,
-          modelFile.size,
-          previewHash,
-          posterHash,
-          parsedPrice,
-          parsedCurrency,
-        ]
-      );
+      // 6. Insert record into database (with Supabase REST fallback)
+      let insertedModel: any;
+      try {
+        const result = await db.query(
+          `INSERT INTO models (
+            id, owner_id, title, description, tags, license,
+            file_hash, file_size, preview_hash, poster_hash,
+            price_cents, currency
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          RETURNING *`,
+          [
+            modelId,
+            ownerId,
+            title.trim(),
+            description.trim(),
+            parsedTags,
+            normalizedLicense,
+            fileHash,
+            finalFileSize,
+            previewHash,
+            posterHash,
+            parsedPrice,
+            parsedCurrency,
+          ]
+        );
+        insertedModel = result.rows[0];
+      } catch (dbErr) {
+        if (!supabase) throw dbErr;
+        const { data, error } = await supabase
+          .from('models')
+          .insert({
+            id: modelId,
+            owner_id: ownerId,
+            title: title.trim(),
+            description: description.trim(),
+            tags: parsedTags,
+            license: normalizedLicense,
+            file_hash: fileHash,
+            file_size: finalFileSize,
+            preview_hash: previewHash,
+            poster_hash: posterHash,
+            price_cents: parsedPrice,
+            currency: parsedCurrency,
+          })
+          .select()
+          .single();
+        if (error) throw dbErr;
+        insertedModel = data;
+      }
 
       res.status(201).json({
         message: 'Model uploaded successfully',
-        model: result.rows[0],
+        model: insertedModel,
       });
     } catch (err) {
       await cleanupFiles(files);

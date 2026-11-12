@@ -3,6 +3,8 @@ import fsp from 'fs/promises';
 import path from 'path';
 import { StorageAdapter, ByteRange } from './storage.interface';
 import { env } from '../config/env';
+import { supabase } from '../config/supabase';
+import { uploadBufferToSupabaseBucket } from './supabase.storage';
 
 export class LocalDiskStorage implements StorageAdapter {
   private baseDir = path.resolve(env.storageDir);
@@ -24,6 +26,12 @@ export class LocalDiskStorage implements StorageAdapter {
       } else {
         throw err;
       }
+    }
+
+    // Sync uploaded asset to Supabase Storage bucket ('models') when Supabase is configured
+    if (supabase && process.env.NODE_ENV !== 'test') {
+      const fileBuffer = await fsp.readFile(targetPath);
+      await uploadBufferToSupabaseBucket(env.supabaseStorageBucket || 'models', hashKey, fileBuffer);
     }
   }
 

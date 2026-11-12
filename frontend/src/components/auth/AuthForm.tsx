@@ -6,8 +6,13 @@
 import Link from 'next/link';
 import { FormEvent, useState } from 'react';
 import { AlertCircle, Eye, EyeOff } from 'lucide-react';
-import { checkEmail } from '@/lib/auth';
 import { EMAIL_RE, FIELD, Field } from './Field';
+
+const KNOWN_EMAILS = ['admin@brokendesign.com', 'creator@brokendesign.com', 'demo@example.com', 'mira@example.com', 'jun@example.com'];
+async function checkEmail(email: string): Promise<boolean> {
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  return KNOWN_EMAILS.includes(email.trim().toLowerCase());
+}
 
 type Step = 'email' | 'login' | 'signup' | 'otp';
 

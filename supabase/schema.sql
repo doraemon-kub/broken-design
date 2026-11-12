@@ -1,4 +1,4 @@
--- Broken Design — Comprehensive PostgreSQL Schema (Supabase)
+-- Lixyte — Comprehensive PostgreSQL Schema (Supabase)
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- 1. Enums (เพิ่ม 'admin' สำหรับบทบาทแอดมิน)
@@ -43,17 +43,29 @@ CREATE INDEX IF NOT EXISTS idx_models_tags ON models USING GIN (tags);
 CREATE INDEX IF NOT EXISTS idx_models_owner ON models (owner_id);
 CREATE INDEX IF NOT EXISTS idx_models_active ON models (created_at DESC) WHERE deleted_at IS NULL AND hidden_at IS NULL;
 
--- 4. Purchases Table
+-- 4. Purchases Table (Single-Item Purchase + License & Watermark Tracking)
 CREATE TABLE IF NOT EXISTS purchases (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     model_id UUID NOT NULL REFERENCES models(id) ON DELETE RESTRICT,
     status purchase_status NOT NULL DEFAULT 'pending',
+    amount_cents INTEGER NOT NULL DEFAULT 0,
+    currency VARCHAR(10) NOT NULL DEFAULT 'USD',
+    license_type VARCHAR(50) NOT NULL DEFAULT 'COMMERCIAL',
+    watermark_hash VARCHAR(128),
+    paid_at TIMESTAMPTZ,
     provider_session_id VARCHAR(255) UNIQUE,
     embed_key VARCHAR(64) UNIQUE NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (user_id, model_id)
 );
+
+-- Safe migration for existing databases
+ALTER TABLE purchases ADD COLUMN IF NOT EXISTS amount_cents INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE purchases ADD COLUMN IF NOT EXISTS currency VARCHAR(10) NOT NULL DEFAULT 'USD';
+ALTER TABLE purchases ADD COLUMN IF NOT EXISTS license_type VARCHAR(50) NOT NULL DEFAULT 'COMMERCIAL';
+ALTER TABLE purchases ADD COLUMN IF NOT EXISTS watermark_hash VARCHAR(128);
+ALTER TABLE purchases ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS idx_purchases_embed_key ON purchases (embed_key);
 
@@ -97,3 +109,33 @@ VALUES (
     true
 ) ON CONFLICT (email) DO UPDATE
 SET role = 'creator', is_seller = true, suspended_at = NULL;
+
+-- 8. Supabase Storage Bucket ('models') & RLS Policies
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('models', 'models', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+DO $$ BEGIN
+    CREATE POLICY "Public Read Access for models bucket"
+    ON storage.objects FOR SELECT
+    USING (bucket_id = 'models');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+    CREATE POLICY "Allow Uploads to models bucket"
+    ON storage.objects FOR INSERT
+    WITH CHECK (bucket_id = 'models');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+    CREATE POLICY "Allow Updates on models bucket"
+    ON storage.objects FOR UPDATE
+    USING (bucket_id = 'models')
+    WITH CHECK (bucket_id = 'models');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+    CREATE POLICY "Allow Deletes from models bucket"
+    ON storage.objects FOR DELETE
+    USING (bucket_id = 'models');
+EXCEPTION WHEN duplicate_object THEN null; END $$;
