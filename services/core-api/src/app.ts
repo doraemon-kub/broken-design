@@ -13,8 +13,13 @@ export const app = express();
 app.use(cors({ origin: env.frontendUrl, credentials: true }));
 app.use(express.json());
 
-app.get('/health', (_req, res) => {
-  res.json({ service: 'broken-design-core-api', status: 'ok' });
+app.get('/health', async (_req, res) => {
+  const dbStatus = await testDbConnection();
+  res.json({
+    service: 'broken-design-core-api',
+    status: 'ok',
+    database: dbStatus,
+  });
 });
 
 app.use('/api/auth', authRouter);
