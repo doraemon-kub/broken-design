@@ -5,9 +5,11 @@
   "scripts": {
     "dev": "tsx watch src/app.ts",
     "build": "tsc",
-    "start": "node dist/app.js"
+    "start": "node dist/app.js",
+    "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
+    "@gltf-transform/core": "^4.5.1",
     "@supabase/supabase-js": "^2.118.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

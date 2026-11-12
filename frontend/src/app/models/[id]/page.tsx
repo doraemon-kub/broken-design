@@ -1,12 +1,13 @@
-// Model detail — preview, description, how to embed it, owner and license rules. Buying and downloading are not connected yet.
+// Model detail — 3D preview from CDN, description, embed snippets, owner, license rules, and download/buy actions.
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Box, Download, Heart } from 'lucide-react';
+import { Download, Heart } from 'lucide-react';
 import ModelCard from '@/components/gallery/ModelCard';
 import EmbedSnippets from '@/components/model/EmbedSnippets';
 import LicenseRules from '@/components/model/LicenseRules';
 import ModelActions from '@/components/model/ModelActions';
+import ModelPreview from '@/components/model/ModelPreview';
 import { fetchModel, fetchMoreFromCreator } from '@/lib/api';
 import { creatorHandle, initials } from '@/lib/creators';
 import { formatCount, formatPrice } from '@/lib/format';
@@ -41,14 +42,7 @@ export default async function ModelDetailPage({ params }: Props) {
       </nav>
 
       <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:items-start">
-        {/* Stand-in until the 3D viewer is wired to the CDN. */}
-        <div
-          aria-hidden
-          className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] text-white/40"
-        >
-          <Box className="h-8 w-8" />
-          <span className="text-sm">3D preview</span>
-        </div>
+        <ModelPreview id={model.id} title={model.title} paid={!free} posterUrl={model.posterUrl} />
 
         <aside className="lg:sticky lg:top-24 lg:col-start-2 lg:row-span-3 lg:row-start-1">
           <div className={`${CARD} space-y-5`}>
@@ -70,7 +64,12 @@ export default async function ModelDetailPage({ params }: Props) {
               </div>
             </div>
 
-            <ModelActions free={free} priceLabel={formatPrice(model.priceCents)} />
+            <ModelActions
+              modelId={model.id}
+              title={model.title}
+              free={free}
+              priceLabel={formatPrice(model.priceCents)}
+            />
 
             <div className="flex items-center gap-3 border-t border-white/10 pt-5">
               <span

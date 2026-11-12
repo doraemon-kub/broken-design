@@ -3,6 +3,7 @@
 // "How to use": copy-ready embed code (web component or iframe) with a short numbered guide.
 import { useEffect, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
+import { CDN_SERVICE_URL } from '@/lib/api';
 
 type Kind = 'component' | 'iframe';
 
@@ -21,8 +22,8 @@ export default function EmbedSnippets({ id, paid }: { id: string; paid: boolean 
   const key = paid ? ' key="YOUR_EMBED_KEY"' : '';
   const code =
     kind === 'component'
-      ? `<script src="${origin}/embed.js"></script>\n<vm-model model-id="${id}"${key}></vm-model>`
-      : `<iframe\n  src="${origin}/embed/${id}${paid ? '?key=YOUR_EMBED_KEY' : ''}"\n  width="600"\n  height="400"\n  loading="lazy"\n></iframe>`;
+      ? `<script type="module" src="${origin}/embed.js"></script>\n<vm-model model-id="${id}" cdn-base="${CDN_SERVICE_URL}"${key} auto-rotate camera-controls></vm-model>`
+      : `<iframe\n  src="${origin}/embed/${id}${paid ? '?key=YOUR_EMBED_KEY' : ''}"\n  width="600"\n  height="400"\n  loading="lazy"\n  allow="fullscreen"\n  style="border:0"\n></iframe>`;
 
   const copy = async () => {
     try {
