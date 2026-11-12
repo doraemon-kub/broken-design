@@ -166,26 +166,20 @@ Agent ทุกตัว **ห้ามละเมิด** กฎต่อไ�
    - รองรับ HTTP Range (`206`/`416`), ETag (`304`), Rate Limit, Constant-Time `embed_key` check
    - ฝังลายน้ำ 2 ชั้น (Metadata HMAC + 64-point Vertex Steganography) ทั้งตอนอัปโหลด (`purchaseId: 'original'`) และตอนผู้ซื้อดาวน์โหลด (`purchaseId` + `license_type` พร้อมบันทึก `watermark_hash`)
    - Endpoint `POST /cdn/verify-watermark` สำหรับพิสูจน์ความเป็นเจ้าของไฟล์ `.glb`
-4. **Auth, Payments & Seller Backend (ต้า & ภีม):**
+4. **Auth, Catalog Models, Payments & Seller Backend (ต้า, เป้ก & ภีม):**
    - `auth.routes.ts` (`register`, `login` พร้อมบล็อกบัญชีที่ถูกระงับ)
+   - `models.routes.ts` (`GET /api/models` ค้นหา/กรอง/แบ่งหน้า, `GET /api/models/:id` ซ่อนลิงก์ไฟล์เต็มของโมเดลเสียเงิน, และ `DELETE /api/models/:id` Soft Delete)
    - `payments.routes.ts` + `payments.test.ts` และ `seller.routes.ts` + `seller.test.ts` (ผ่าน **17/17 tests**)
 5. **Frontend Viewer, Gallery & Cross-Origin Embed (เจี๊ยบ & นนท์):**
    - หน้า `/`, `/gallery`, `/models/[id]`, `/creators/[handle]`, `/embed/[id]`, และ `public/embed.js` (`<vm-model>`) เชื่อมต่อกับ Supabase และ CDN Service เรียบร้อย
 
 ---
 
-### Phase 2: การรวมโค้ดแคตตาล็อก, ระบบแอดมิน และการเชื่อมหน้า Dashboard (Current Priority 🚧)
+### Phase 2: ระบบแอดมิน และการเชื่อมหน้า Dashboard (Current Priority 🚧)
 
 เมื่อผู้ใช้งานสั่งให้พัฒนาต่อในส่วนที่เหลือ Agent ต้องยึดแนวทางและลำดับความสำคัญดังนี้:
 
-1. **งานที่ 1 — รวมและเชื่อมโยง Models Catalog API (`services/core-api/src/modules/models/models.routes.ts` — เป้ก):**
-   - **เป้าหมาย:** แทนที่ Stub ใน `models.routes.ts` ด้วยโค้ดค้นหา/กรอง/แบ่งหน้าจริง (หรือ Merge จากกิ่ง `origin/Pek`)
-   - **ข้อกำหนด:**
-     - `GET /api/models`: รองรับ query `q` (ค้นหาชื่อ/คำอธิบาย), `tag` (`$1 = ANY(m.tags)`), `license`, `price` (`free` | `paid`), `page`, `limit` และต้องกรอง `m.hidden_at IS NULL AND m.deleted_at IS NULL AND u.suspended_at IS NULL` เสมอ
-     - `GET /api/models/:id`: คืนข้อมูลโมเดลพร้อมชื่อครีเอเตอร์, `previewUrl` (`/cdn/models/:id/preview.glb`), `posterUrl` (`/cdn/models/:id/poster.webp`) และ **ห้ามส่งลิงก์ไฟล์เต็ม (`file_hash`) หากเป็นโมเดลเสียเงิน**
-     - เขียน Unit Tests ทดสอบใน `services/core-api/src/modules/models/models.test.ts`
-
-2. **งานที่ 2 — พัฒนา Admin Backend Module (`services/core-api/src/modules/admin/` — ต้า & เป้ก):**
+1. **งานที่ 1 — พัฒนา Admin Backend Module (`services/core-api/src/modules/admin/` — ต้า & เป้ก):**
    - **เป้าหมาย:** สร้าง `admin.routes.ts` และผูกเข้ากับ `app.use('/api/admin', adminRouter)` ใน `services/core-api/src/app.ts` โดยทุก Route ต้องผ่าน `requireAuth` และ `requireAdmin` (ตรวจ `role === 'admin'` และ `suspended_at IS NULL` จากฐานข้อมูลจริง)
    - **Endpoints ที่ต้องมี:**
      - `GET /api/admin/overview` — สรุปจำนวนผู้ใช้ทั้งหมด, จำนวนโมเดล, จำนวนรายการสั่งซื้อสำเร็จ และยอดขายรวม
@@ -195,7 +189,7 @@ Agent ทุกตัว **ห้ามละเมิด** กฎต่อไ�
      - `PATCH /api/admin/models/:id/hide` — ซ่อน (`hidden_at = NOW()`) หรือแสดงผลคืน (`hidden_at = NULL`) โมเดล (เมื่อซ่อนแล้ว CDN จะบล็อกการสตรีมด้วย `403 MODEL_UNAVAILABLE` ทันที)
      - `GET /api/admin/purchases` — ดูรายการสั่งซื้อทั้งหมดในระบบพร้อมข้อมูลผู้ซื้อ โมเดล ราคา และ `watermark_hash`
 
-3. **งานที่ 3 — เชื่อมต่อ Frontend Auth, Mock Checkout, Buyer/Seller/Admin Dashboards (`frontend/` — เจี๊ยบ & ภีม):**
+2. **งานที่ 2 — เชื่อมต่อ Frontend Auth, Mock Checkout, Buyer/Seller/Admin Dashboards (`frontend/` — เจี๊ยบ & ภีม):**
    - **Auth (`/login`):** เชื่อมต่อฟอร์มเข้าสู่ระบบและสมัครสมาชิกเข้ากับ `POST /api/auth/login` และ `POST /api/auth/register` พร้อมเก็บ JWT Token
    - **Mock Checkout (`/pay/mock/[id]`):** หน้าจำลองการชำระเงินที่เรียก `POST /api/models/:id/checkout` และ `POST /api/purchases/:id/confirm-mock` เมื่อกดปุ่มยืนยันการชำระเงิน
    - **Buyer Dashboard (`/me`):** ดึงรายการโมเดลที่ซื้อแล้วจาก `GET /api/me/purchases` แสดง `embed_key`, ประเภท License, ปุ่มดาวน์โหลด `.glb` และปุ่มกด Regenerate Key (`POST /api/purchases/:id/regenerate-key`)
