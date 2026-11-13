@@ -2,11 +2,11 @@
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { buildHref } from '@/lib/pagination';
-import type { ModelsPage } from '@/lib/types';
+import type { ModelsPage, ModelsParams } from '@/lib/types';
 
 const BTN = 'inline-flex items-center gap-2 rounded-lg border border-white/15 px-3 py-1.5 text-sm';
 
-export default function Pagination({ data }: { data: ModelsPage }) {
+export default function Pagination({ data, params = {} }: { data: ModelsPage; params?: ModelsParams }) {
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
   if (totalPages <= 1) return null;
   const { page } = data;
@@ -14,7 +14,7 @@ export default function Pagination({ data }: { data: ModelsPage }) {
   return (
     <nav aria-label="Pagination" className="mt-10 flex items-center justify-center gap-4">
       {page > 1 ? (
-        <Link href={buildHref({ page: page - 1 })} rel="prev" className={`${BTN} text-white/65 transition-colors hover:border-white/30 hover:text-white`}>
+        <Link href={buildHref({ ...params, page: page - 1 })} rel="prev" className={`${BTN} text-white/65 transition-colors hover:border-white/30 hover:text-white`}>
           <ArrowLeft aria-hidden className="h-4 w-4" />
           Prev
         </Link>
@@ -28,7 +28,7 @@ export default function Pagination({ data }: { data: ModelsPage }) {
         Page {page} / {totalPages}
       </span>
       {page < totalPages ? (
-        <Link href={buildHref({ page: page + 1 })} rel="next" className={`${BTN} text-white/65 transition-colors hover:border-white/30 hover:text-white`}>
+        <Link href={buildHref({ ...params, page: page + 1 })} rel="next" className={`${BTN} text-white/65 transition-colors hover:border-white/30 hover:text-white`}>
           Next
           <ArrowRight aria-hidden className="h-4 w-4" />
         </Link>

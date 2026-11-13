@@ -13,7 +13,8 @@ export default async function GalleryPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const data = await fetchModels(parseParams(await searchParams));
+  const params = parseParams(await searchParams);
+  const data = await fetchModels(params);
 
   return (
     <main className="mx-auto max-w-[1400px] px-4 pb-16 pt-24 md:px-6">
@@ -24,7 +25,7 @@ export default async function GalleryPage({
         <p className="text-sm text-white/65">
           {data.total} {data.total === 1 ? 'model' : 'models'}
         </p>
-        <FilterBar />
+        <FilterBar params={params} />
       </div>
 
       {data.items.length > 0 ? (
@@ -41,7 +42,7 @@ export default async function GalleryPage({
         </div>
       )}
 
-      <Pagination data={data} />
+      <Pagination data={data} params={params} />
     </main>
   );
 }

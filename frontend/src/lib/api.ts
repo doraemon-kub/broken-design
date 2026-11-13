@@ -14,6 +14,10 @@ export async function fetchModels(params: ModelsParams): Promise<ModelsPage> {
   if (USE_MOCK) return queryModels(MOCK_MODELS, params);
 
   const sp = new URLSearchParams();
+  if (params.q) sp.set('q', params.q);
+  if (params.tag) sp.set('tag', params.tag);
+  if (params.license) sp.set('license', params.license);
+  if (params.price) sp.set('price', params.price);
   if (params.page) sp.set('page', String(params.page));
 
   const res = await fetch(`${CORE_API_URL}/api/models?${sp}`, { cache: 'no-store' });
