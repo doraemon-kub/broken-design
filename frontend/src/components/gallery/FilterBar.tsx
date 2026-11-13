@@ -1,13 +1,13 @@
-// Gallery filters — UI only. The dropdowns look and open like real filters but do not filter anything yet.
-import { GALLERY_TAGS, LICENSES } from '@/lib/types';
+// Gallery filters — connected to URL searchParams (?tag=&license=&price=).
+import { GALLERY_TAGS, LICENSES, type ModelsParams } from '@/lib/types';
 import FilterDropdown from './FilterDropdown';
 
-export default function FilterBar() {
+export default function FilterBar({ params = {} }: { params?: ModelsParams }) {
   return (
     <div className="ml-auto flex flex-wrap items-center justify-end gap-3" role="group" aria-label="Filters">
-      <FilterDropdown label="Tag" options={['All', ...GALLERY_TAGS]} />
-      <FilterDropdown label="License" options={['All', ...LICENSES]} />
-      <FilterDropdown label="Price" options={['All', 'Free', 'Paid']} />
+      <FilterDropdown label="Tag" paramKey="tag" options={['All', ...GALLERY_TAGS]} params={params} />
+      <FilterDropdown label="License" paramKey="license" options={['All', ...LICENSES]} params={params} />
+      <FilterDropdown label="Price" paramKey="price" options={['All', 'Free', 'Paid']} params={params} />
     </div>
   );
 }

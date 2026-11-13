@@ -2,7 +2,7 @@
 
 // Top navigation — logo, Gallery / Docs, search box (UI only, searches nothing yet), Log in
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { isAuthPath } from '@/lib/auth-paths';
@@ -16,12 +16,14 @@ const LINKS = [
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [query, setQuery] = useState('');
   const [mobileSearch, setMobileSearch] = useState(false);
 
-  // Search is visual only for now: submitting does nothing.
   const submit = (e: FormEvent) => {
     e.preventDefault();
+    const q = query.trim();
+    router.push(q ? `/gallery?q=${encodeURIComponent(q)}` : '/gallery');
   };
 
   if (isAuthPath(pathname)) return null;

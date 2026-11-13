@@ -12,6 +12,16 @@ export const SUPABASE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISH
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK !== 'false';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** List models for the gallery (paged, most popular first). Pages never need to know whether the data is mocked. */
+export async function fetchModels(params: ModelsParams): Promise<ModelsPage> {
+  if (USE_MOCK) return queryModels(MOCK_MODELS, params);
+
+  const sp = new URLSearchParams();
+  if (params.q) sp.set('q', params.q);
+  if (params.tag) sp.set('tag', params.tag);
+  if (params.license) sp.set('license', params.license);
+  if (params.price) sp.set('price', params.price);
+  if (params.page) sp.set('page', String(params.page));
 function mapSupabaseRow(row: any): Model | null {
   const owner = Array.isArray(row.users) ? row.users[0] : row.users;
   if (row.hidden_at || row.deleted_at || owner?.suspended_at) return null;

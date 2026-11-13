@@ -18,8 +18,11 @@ export interface Model {
   description?: string;
 }
 
-// Search/filter params are not supported (the gallery filter UI is visual only); only paging.
 export interface ModelsParams {
+  q?: string;
+  tag?: string;
+  license?: License;
+  price?: 'free' | 'paid';
   page?: number;
 }
 

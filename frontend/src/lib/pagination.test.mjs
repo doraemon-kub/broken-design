@@ -32,15 +32,20 @@ test('pagination slices and clamps the page', () => {
   assert.equal(queryModels([], {}).page, 1);
 });
 
-test('parseParams keeps only a valid page number', () => {
-  assert.deepEqual(parseParams({ page: '3', q: 'ignored', tag: 'x' }), { page: 3 });
+test('parseParams validates search, filter, and page parameters', () => {
+  assert.deepEqual(
+    parseParams({ page: '3', q: '  drone ', tag: 'sci-fi', license: 'cc0', price: 'free' }),
+    { page: 3, q: 'drone', tag: 'sci-fi', license: 'CC0', price: 'free' },
+  );
+  assert.deepEqual(parseParams({ tag: 'invalid-tag', license: 'INVALID', price: 'invalid' }), {});
   assert.equal(parseParams({ page: '-4' }).page, undefined);
   assert.equal(parseParams({ page: 'abc' }).page, undefined);
   assert.equal(parseParams({}).page, undefined);
 });
 
-test('buildHref only carries the page', () => {
+test('buildHref carries filters and page', () => {
   assert.equal(buildHref({}), '/gallery');
   assert.equal(buildHref({ page: 1 }), '/gallery');
   assert.equal(buildHref({ page: 2 }), '/gallery?page=2');
+  assert.equal(buildHref({ tag: 'vehicle', price: 'free', page: 2 }), '/gallery?tag=vehicle&price=free&page=2');
 });

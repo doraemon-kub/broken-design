@@ -1,14 +1,30 @@
 'use client';
 
-// Dropdown button for one gallery filter — UI only: the choice is remembered in local state for the look and feel,
-// it does not change the list of models.
+// Dropdown button for one gallery filter — updates the URL query parameter when an option is selected.
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Check, ChevronDown } from 'lucide-react';
+import { buildHref } from '@/lib/pagination';
+import type { License, ModelsParams } from '@/lib/types';
 
-export default function FilterDropdown({ label, options }: { label: string; options: readonly string[] }) {
+export default function FilterDropdown({
+  label,
+  paramKey,
+  options,
+  params = {},
+}: {
+  label: string;
+  paramKey: 'tag' | 'license' | 'price';
+  options: readonly string[];
+  params?: ModelsParams;
+}) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [value, setValue] = useState(options[0]);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  const currentParam = params[paramKey];
+  const value =
+    options.find((o) => o.toLowerCase() === currentParam?.toLowerCase()) ?? options[0];
   const chosen = value !== options[0];
 
   useEffect(() => {
@@ -26,6 +42,20 @@ export default function FilterDropdown({ label, options }: { label: string; opti
       document.removeEventListener('keydown', onKey);
     };
   }, [open]);
+
+  const selectOption = (o: string) => {
+    setOpen(false);
+    const isAll = o === options[0];
+    const next: ModelsParams = { ...params, page: 1 };
+    if (paramKey === 'tag') {
+      next.tag = isAll ? undefined : o.toLowerCase();
+    } else if (paramKey === 'license') {
+      next.license = isAll ? undefined : (o.toUpperCase() as License);
+    } else if (paramKey === 'price') {
+      next.price = isAll ? undefined : (o.toLowerCase() as 'free' | 'paid');
+    }
+    router.push(buildHref(next));
+  };
 
   return (
     <div ref={rootRef} className="relative">
@@ -53,10 +83,7 @@ export default function FilterDropdown({ label, options }: { label: string; opti
               <button
                 type="button"
                 aria-pressed={o === value}
-                onClick={() => {
-                  setValue(o);
-                  setOpen(false);
-                }}
+                onClick={() => selectOption(o)}
                 className={`flex w-full items-center justify-between gap-3 rounded-md px-3 py-1.5 text-left text-sm transition-colors hover:bg-white/10 ${
                   o === value ? 'text-white' : 'text-white/65 hover:text-white'
                 }`}
