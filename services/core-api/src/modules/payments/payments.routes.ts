@@ -1,4 +1,4 @@
-// [ภีม] ระบบซื้อจำลองและจัดการ embed_key
+// [ภีม] ระบบซื้อจำลองรายชิ้น (Single-Item Purchase) และจัดการ embed_key + License/Watermark
 import { Router } from 'express';
 import crypto from 'crypto';
 import { requireAuth } from '../../middlewares/auth.middleware';
@@ -27,14 +27,14 @@ function requireMockProvider(
 }
 
 // ─── 1. POST /api/models/:id/checkout ───────────────────────────────────────
-// สร้างคำสั่งซื้อ (pending) ราคาดึงจากฐานข้อมูลจริง — กันซื้อซ้ำ
+// สร้างคำสั่งซื้อรายชิ้น (pending) ล็อกราคา สกุลเงิน และประเภท License จากฐานข้อมูลจริง — กันซื้อซ้ำ
 paymentsRouter.post('/models/:id/checkout', requireAuth, async (req, res) => {
   const userId = req.user!.id;
   const modelId = req.params.id;
 
-  // ดึงราคาจากฐานข้อมูลจริง
+  // ดึงราคาและประเภท License จากฐานข้อมูลจริง
   const modelRow = await db.query(
-    `SELECT id, title, price_cents, currency, deleted_at, hidden_at, owner_id
+    `SELECT id, title, price_cents, currency, license, deleted_at, hidden_at, owner_id
      FROM models WHERE id = $1`,
     [modelId],
   );
@@ -78,13 +78,17 @@ paymentsRouter.post('/models/:id/checkout', requireAuth, async (req, res) => {
     }
   }
 
-  // สร้างคำสั่งซื้อใหม่ status=pending
+  // สร้างคำสั่งซื้อใหม่ status=pending พร้อมล็อก amount_cents, currency, license_type
   const embedKey = generateEmbedKey();
+  const amountCents = Number(model.price_cents) || 0;
+  const currency = String(model.currency || 'THB').trim();
+  const licenseType = String(model.license || 'COMMERCIAL').trim();
+
   const result = await db.query(
-    `INSERT INTO purchases (user_id, model_id, status, embed_key)
-     VALUES ($1, $2, 'pending', $3)
+    `INSERT INTO purchases (user_id, model_id, status, embed_key, amount_cents, currency, license_type)
+     VALUES ($1, $2, 'pending', $3, $4, $5, $6)
      RETURNING id`,
-    [userId, modelId, embedKey],
+    [userId, modelId, embedKey, amountCents, currency, licenseType],
   );
   const purchaseId = result.rows[0].id;
 
@@ -107,7 +111,7 @@ paymentsRouter.post('/models/:id/checkout', requireAuth, async (req, res) => {
 });
 
 // ─── 2. POST /api/purchases/:id/confirm-mock ────────────────────────────────
-// กดจ่ายจำลอง → เปลี่ยน status เป็น paid, embed_key พร้อมใช้ทันที
+// กดจ่ายจำลอง → เปลี่ยน status เป็น paid, บันทึก paid_at = NOW(), embed_key พร้อมใช้ทันที
 // เปิดได้เฉพาะเมื่อ PAYMENT_PROVIDER=mock
 paymentsRouter.post('/purchases/:id/confirm-mock', requireAuth, requireMockProvider, async (req, res) => {
   const userId = req.user!.id;
@@ -115,9 +119,9 @@ paymentsRouter.post('/purchases/:id/confirm-mock', requireAuth, requireMockProvi
 
   const result = await db.query(
     `UPDATE purchases
-     SET status = 'paid'
+     SET status = 'paid', paid_at = NOW()
      WHERE id = $1 AND user_id = $2 AND status = 'pending'
-     RETURNING id, model_id, embed_key`,
+     RETURNING id, model_id, embed_key, amount_cents, currency, license_type, paid_at`,
     [purchaseId, userId],
   );
 
@@ -139,6 +143,55 @@ paymentsRouter.post('/purchases/:id/confirm-mock', requireAuth, requireMockProvi
     purchaseId: purchase.id,
     modelId: purchase.model_id,
     embedKey: purchase.embed_key,
+    amountCents: purchase.amount_cents,
+    currency: purchase.currency,
+    licenseType: purchase.license_type,
+    paidAt: purchase.paid_at,
+  });
+});
+
+// ─── 2b. POST /api/models/:id/pay-mock (Alias by modelId for single-click mock pay) ─
+paymentsRouter.post('/models/:id/pay-mock', requireAuth, requireMockProvider, async (req, res) => {
+  const userId = req.user!.id;
+  const modelId = req.params.id;
+
+  const result = await db.query(
+    `UPDATE purchases
+     SET status = 'paid', paid_at = NOW()
+     WHERE model_id = $1 AND user_id = $2 AND status = 'pending'
+     RETURNING id, model_id, embed_key, amount_cents, currency, license_type, paid_at`,
+    [modelId, userId],
+  );
+
+  if (result.rowCount === 0) {
+    const check = await db.query(
+      `SELECT id, model_id, embed_key, status, paid_at FROM purchases WHERE model_id = $1 AND user_id = $2`,
+      [modelId, userId],
+    );
+    if (check.rowCount! > 0 && check.rows[0].status === 'paid') {
+      const paidRow = check.rows[0];
+      res.json({
+        message: 'Payment already confirmed',
+        purchaseId: paidRow.id,
+        modelId: paidRow.model_id,
+        embedKey: paidRow.embed_key,
+        paidAt: paidRow.paid_at,
+      });
+      return;
+    }
+    throw new AppError(404, 'PURCHASE_NOT_FOUND', 'Pending purchase not found for this model');
+  }
+
+  const purchase = result.rows[0];
+  res.json({
+    message: 'Payment confirmed (mock)',
+    purchaseId: purchase.id,
+    modelId: purchase.model_id,
+    embedKey: purchase.embed_key,
+    amountCents: purchase.amount_cents,
+    currency: purchase.currency,
+    licenseType: purchase.license_type,
+    paidAt: purchase.paid_at,
   });
 });
 
@@ -149,13 +202,14 @@ paymentsRouter.post('/webhooks/stripe', async (_req, res) => {
 });
 
 // ─── 4. GET /api/me/purchases ────────────────────────────────────────────────
-// รายการที่ซื้อแล้ว (เฉพาะ status=paid) พร้อม embed_key
+// รายการที่ซื้อแล้ว (เฉพาะ status=paid) พร้อม embed_key, license_type, paid_at, watermark_hash
 paymentsRouter.get('/me/purchases', requireAuth, async (req, res) => {
   const userId = req.user!.id;
 
   const result = await db.query(
-    `SELECT p.id, p.model_id, p.embed_key, p.created_at,
-            m.title, m.price_cents, m.currency
+    `SELECT p.id, p.model_id, p.embed_key, p.amount_cents, p.currency AS purchase_currency,
+            p.license_type, p.watermark_hash, p.paid_at, p.created_at,
+            m.title, m.price_cents, m.currency, m.license
      FROM purchases p
      JOIN models m ON m.id = p.model_id
      WHERE p.user_id = $1 AND p.status = 'paid'
@@ -168,10 +222,14 @@ paymentsRouter.get('/me/purchases', requireAuth, async (req, res) => {
       id: r.id,
       modelId: r.model_id,
       title: r.title,
-      priceCents: r.price_cents,
-      currency: r.currency,
+      priceCents: r.amount_cents ?? r.price_cents,
+      amountCents: r.amount_cents ?? r.price_cents,
+      currency: r.purchase_currency ?? r.currency,
+      licenseType: r.license_type ?? r.license ?? 'COMMERCIAL',
+      watermarkHash: r.watermark_hash ?? null,
       embedKey: r.embed_key,
-      purchasedAt: r.created_at,
+      paidAt: r.paid_at ?? r.created_at,
+      purchasedAt: r.paid_at ?? r.created_at,
     })),
   });
 });
@@ -209,8 +267,9 @@ paymentsRouter.get('/purchases/:id', requireAuth, async (req, res) => {
   const purchaseId = req.params.id;
 
   const result = await db.query(
-    `SELECT p.id, p.model_id, p.status, p.created_at,
-            m.title, m.price_cents, m.currency
+    `SELECT p.id, p.model_id, p.status, p.amount_cents, p.currency AS purchase_currency,
+            p.license_type, p.watermark_hash, p.paid_at, p.created_at,
+            m.title, m.price_cents, m.currency, m.license
      FROM purchases p
      JOIN models m ON m.id = p.model_id
      WHERE p.id = $1 AND p.user_id = $2`,
@@ -226,9 +285,13 @@ paymentsRouter.get('/purchases/:id', requireAuth, async (req, res) => {
     id: r.id,
     modelId: r.model_id,
     title: r.title,
-    priceCents: r.price_cents,
-    currency: r.currency,
+    priceCents: r.amount_cents ?? r.price_cents,
+    amountCents: r.amount_cents ?? r.price_cents,
+    currency: r.purchase_currency ?? r.currency,
+    licenseType: r.license_type ?? r.license ?? 'COMMERCIAL',
+    watermarkHash: r.watermark_hash ?? null,
     status: r.status,
+    paidAt: r.paid_at ?? null,
     createdAt: r.created_at,
   });
 });
