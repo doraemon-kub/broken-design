@@ -4,9 +4,11 @@
 // and finally verify with a 6-digit one-time code (OTP).
 // UI only: the lookup is mocked (lib/auth.ts), no code is sent and nothing is sent to core-api yet.
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { EMAIL_RE, FIELD, Field } from './Field';
+import { CORE_API_URL } from '@/lib/api';
 
 const KNOWN_EMAILS = ['admin@brokendesign.com', 'creator@brokendesign.com', 'demo@example.com', 'mira@example.com', 'jun@example.com'];
 async function checkEmail(email: string): Promise<boolean> {
@@ -80,6 +82,7 @@ const PRIMARY =
   'mt-1 h-10 w-full rounded-lg bg-white text-[15px] font-medium text-black transition-colors hover:bg-white/85 disabled:opacity-60';
 
 export default function AuthForm() {
+  const router = useRouter();
   const [step, setStep] = useState<Step>('email');
   const [values, setValues] = useState<Values>({ email: '', name: '', password: '', code: '' });
   const [flow, setFlow] = useState<'login' | 'signup'>('login');
@@ -133,12 +136,73 @@ export default function AuthForm() {
       goTo(exists ? 'login' : 'signup');
       return;
     }
-    if (step === 'login' || step === 'signup') {
-      setFlow(step);
-      goTo('otp');
+    if (step === 'login') {
+      setChecking(true);
+      try {
+        const res = await fetch(`${CORE_API_URL}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: values.email, password: values.password }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          setErrors({ password: data?.error?.message || 'Email or password is incorrect.' });
+          setChecking(false);
+          return;
+        }
+        if (data?.token) {
+          localStorage.setItem('token', data.token);
+          if (data?.user) localStorage.setItem('user', JSON.stringify(data.user));
+          setFlow('login');
+          goTo('otp');
+          return;
+        }
+      } catch {
+        setFlow('login');
+        goTo('otp');
+        return;
+      } finally {
+        setChecking(false);
+      }
+    }
+
+    if (step === 'signup') {
+      setChecking(true);
+      try {
+        const res = await fetch(`${CORE_API_URL}/api/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: values.email, password: values.password, displayName: values.name }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          setErrors({ password: data?.error?.message || 'Registration failed.' });
+          setChecking(false);
+          return;
+        }
+        if (data?.token) {
+          localStorage.setItem('token', data.token);
+          if (data?.user) localStorage.setItem('user', JSON.stringify(data.user));
+          setFlow('signup');
+          goTo('otp');
+          return;
+        }
+      } catch {
+        setFlow('signup');
+        goTo('otp');
+        return;
+      } finally {
+        setChecking(false);
+      }
+    }
+
+    if (step === 'otp') {
+      setDone(true);
+      setTimeout(() => {
+        router.push('/me');
+      }, 500);
       return;
     }
-    setDone(true);
   };
 
   const fieldClass = (key: keyof Values) =>

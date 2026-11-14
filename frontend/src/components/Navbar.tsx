@@ -1,17 +1,19 @@
 'use client';
 
-// Top navigation — logo, Gallery / Docs, search box (UI only, searches nothing yet), Log in
+// Top navigation — logo, Gallery / Docs / Dashboard, search box, User menu & Log in
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { FormEvent, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { FormEvent, useEffect, useState } from 'react';
+import { LogOut, Search, User, X } from 'lucide-react';
 import { isAuthPath } from '@/lib/auth-paths';
+import { initials } from '@/lib/creators';
+import type { AuthUser } from '@/lib/types';
 
 // `desktopOnly` links are hidden below `sm` so the bar fits at 375px.
 const LINKS = [
   { href: '/gallery', label: 'Gallery' },
-  { href: '/docs', label: 'Docs', desktopOnly: true },
   { href: '/creator', label: 'Creator' },
+  { href: '/me', label: 'Dashboard' },
 ];
 
 export default function Navbar() {
@@ -19,6 +21,38 @@ export default function Navbar() {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [mobileSearch, setMobileSearch] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+
+  // Sync auth state
+  useEffect(() => {
+    const updateAuth = () => {
+      const storedToken = localStorage.getItem('token');
+      const storedUser = localStorage.getItem('user');
+      setToken(storedToken);
+      if (storedUser) {
+        try {
+          setUser(JSON.parse(storedUser));
+        } catch {
+          setUser(null);
+        }
+      } else {
+        setUser(null);
+      }
+    };
+
+    updateAuth();
+    window.addEventListener('storage', updateAuth);
+    return () => window.removeEventListener('storage', updateAuth);
+  }, [pathname]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setToken(null);
+    setUser(null);
+    router.push('/login');
+  };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -42,6 +76,8 @@ export default function Navbar() {
     </form>
   );
 
+  const displayName = user?.display_name || user?.email?.split('@')[0] || 'User';
+
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-black/90 backdrop-blur">
       <nav aria-label="Main" className="mx-auto flex h-16 max-w-[1400px] items-center gap-2 px-4 sm:gap-5 md:px-6">
@@ -50,14 +86,14 @@ export default function Navbar() {
         </Link>
 
         <ul className="flex items-center gap-3 text-sm sm:gap-5 sm:text-[15px]">
-          {LINKS.map(({ href, label, desktopOnly }) => {
+          {LINKS.map(({ href, label }) => {
             const active = pathname === href || pathname.startsWith(`${href}/`);
             return (
-              <li key={href} className={desktopOnly ? 'hidden sm:block' : undefined}>
+              <li key={href}>
                 <Link
                   href={href}
                   aria-current={active ? 'page' : undefined}
-                  className={active ? 'text-white' : 'text-white/65 transition-colors hover:text-white'}
+                  className={active ? 'text-white font-medium' : 'text-white/65 transition-colors hover:text-white'}
                 >
                   {label}
                 </Link>
@@ -78,12 +114,37 @@ export default function Navbar() {
           >
             {mobileSearch ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
           </button>
-          <Link
-            href="/login"
-            className="whitespace-nowrap rounded-lg bg-white px-3 py-1.5 font-medium sm:px-3.5 text-black transition-colors hover:bg-white/85"
-          >
-            Log in
-          </Link>
+
+          {token ? (
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Link
+                href="/me"
+                className="flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-xs text-white transition-colors hover:border-white/30 hover:bg-white/10"
+                title="Go to My Dashboard"
+              >
+                <span className="grid h-5 w-5 place-items-center rounded-full bg-hud/20 font-mono text-[10px] text-hud">
+                  {initials(displayName)}
+                </span>
+                <span className="hidden sm:inline font-mono">{displayName}</span>
+              </Link>
+              <button
+                type="button"
+                onClick={handleLogout}
+                aria-label="Log out"
+                title="Log out"
+                className="grid h-8 w-8 place-items-center rounded-lg text-white/50 hover:text-red-400 hover:bg-white/5"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              className="whitespace-nowrap rounded-lg bg-white px-3 py-1.5 font-medium sm:px-3.5 text-black transition-colors hover:bg-white/85 text-xs sm:text-sm"
+            >
+              Log in
+            </Link>
+          )}
         </div>
       </nav>
 

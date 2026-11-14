@@ -1,7 +1,7 @@
 import { buildProfile, creatorHandle, type CreatorProfile } from './creators';
 import { PAGE_SIZE, queryModels } from './pagination';
 import { MOCK_MODELS } from './mock-models';
-import type { License, Model, ModelsPage, ModelsParams } from './types';
+import type { License, Model, ModelsPage, ModelsParams, PurchaseItem, SellerModelItem, SellerSalesSummary } from './types';
 
 export const CORE_API_URL = process.env.NEXT_PUBLIC_CORE_API_URL || 'http://localhost:4000';
 export const CDN_SERVICE_URL = process.env.NEXT_PUBLIC_CDN_SERVICE_URL || 'http://localhost:4001';
@@ -12,16 +12,6 @@ export const SUPABASE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISH
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK !== 'false';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** List models for the gallery (paged, most popular first). Pages never need to know whether the data is mocked. */
-export async function fetchModels(params: ModelsParams): Promise<ModelsPage> {
-  if (USE_MOCK) return queryModels(MOCK_MODELS, params);
-
-  const sp = new URLSearchParams();
-  if (params.q) sp.set('q', params.q);
-  if (params.tag) sp.set('tag', params.tag);
-  if (params.license) sp.set('license', params.license);
-  if (params.price) sp.set('price', params.price);
-  if (params.page) sp.set('page', String(params.page));
 function mapSupabaseRow(row: any): Model | null {
   const owner = Array.isArray(row.users) ? row.users[0] : row.users;
   if (row.hidden_at || row.deleted_at || owner?.suspended_at) return null;
@@ -167,4 +157,93 @@ export async function fetchCreator(handle: string): Promise<CreatorProfile | nul
     }
   }
   return null;
+}
+
+/** Fetch purchases for the currently logged-in user (`GET /api/me/purchases`). */
+export async function fetchMyPurchases(token: string): Promise<PurchaseItem[]> {
+  const res = await fetch(`${CORE_API_URL}/api/me/purchases`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    throw new Error(err?.error?.message || `Failed to fetch purchases (${res.status})`);
+  }
+  const data = await res.json();
+  return data.purchases || [];
+}
+
+/** Regenerate embed_key for a purchase (`POST /api/purchases/:id/regenerate-key`). */
+export async function regenerateEmbedKey(purchaseId: string, token: string): Promise<{ id: string; embedKey: string }> {
+  const res = await fetch(`${CORE_API_URL}/api/purchases/${encodeURIComponent(purchaseId)}/regenerate-key`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    throw new Error(err?.error?.message || `Failed to regenerate key (${res.status})`);
+  }
+  return res.json();
+}
+
+/** Enable seller mode for user (`POST /api/seller/enable`). */
+export async function enableSellerMode(token: string): Promise<void> {
+  const res = await fetch(`${CORE_API_URL}/api/seller/enable`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    throw new Error(err?.error?.message || `Failed to enable seller mode (${res.status})`);
+  }
+}
+
+/** Fetch seller status (`GET /api/seller/status`). */
+export async function fetchSellerStatus(token: string): Promise<boolean> {
+  const res = await fetch(`${CORE_API_URL}/api/seller/status`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  });
+  if (!res.ok) return false;
+  const data = await res.json();
+  return Boolean(data.isSeller);
+}
+
+/** Fetch seller's own uploaded models (`GET /api/seller/models`). */
+export async function fetchSellerModels(token: string): Promise<SellerModelItem[]> {
+  const res = await fetch(`${CORE_API_URL}/api/seller/models`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    throw new Error(err?.error?.message || `Failed to fetch seller models (${res.status})`);
+  }
+  const data = await res.json();
+  return data.models || [];
+}
+
+/** Fetch seller sales summary (`GET /api/seller/sales`). */
+export async function fetchSellerSales(token: string): Promise<SellerSalesSummary> {
+  const res = await fetch(`${CORE_API_URL}/api/seller/sales`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    throw new Error(err?.error?.message || `Failed to fetch seller sales (${res.status})`);
+  }
+  return res.json();
+}
+
+/** Soft delete a model (`DELETE /api/models/:id`). */
+export async function deleteModel(modelId: string, token: string): Promise<void> {
+  const res = await fetch(`${CORE_API_URL}/api/models/${encodeURIComponent(modelId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => null);
+    throw new Error(err?.error?.message || `Failed to delete model (${res.status})`);
+  }
 }
